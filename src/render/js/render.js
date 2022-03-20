@@ -111,13 +111,16 @@ let audioFile; // audio file path
 let csvFile; // csv file
 let featureData; // csv read feature data
 
+let fileDir; // directory containing all the audio files
+
 // audio stream
 let fileBuffer; // audio file buffer
 let audioData; // audio file data
 let signal; // audio signal from audio data
 
 // feature extraction
-let featureContainer = []; // container for all feature
+const INPUT_DIM = 74;
+// let featureContainer = []; // container for all feature
 
 // model Prediction
 let arousal; // arousal score
@@ -137,7 +140,8 @@ const n_mfcc = 13;
 const audioElement = document.getElementById('audio');
 
 const fileBtn = document.getElementById("fileBtn");
-fileBtn.onclick = getAudioFile;
+// fileBtn.onclick = getAudioFile;
+fileBtn.onclick = getFileDir;
 
 const csvBtn = document.getElementById("csvBtn");
 csvBtn.onclick = getCSVFile;
@@ -184,7 +188,6 @@ async function getAudioFile() {
                 }
             ]
         });
-
         audioFile = selectedFile.filePaths;
         const canceled = selectedFile.canceled;
 
@@ -192,21 +195,39 @@ async function getAudioFile() {
             console.log(audioFile);
             console.log(canceled);
         }
-
-        fileBuffer = fs.readFileSync(audioFile[0]);
-        audioElement.src = audioFile;
-        audioData = wav.decode(fileBuffer);
-        signal = audioData.channelData[0];
     } catch (err) {
         console.log(err);
   }
 }
 
 
+// get all files inside directory
+async function getFileDir() {
+    try {
+        const selectedDir = await dialog.showOpenDialog({
+            title: 'Open Directory',
+            defaultPath: app.getPath('desktop'),
+            buttonLabel: 'Open',
+            properties: ['openDirectory'],
+        });
+        fileDir = selectedDir.filePaths;
+        const canceled = selectedDir.canceled;
+        
+        fileBuffer = fs.readdirSync(fileDir[0]);
+        if (debug) {
+            console.log(fileDir);
+            console.log(canceled);
+            console.log(fileBuffer);
+        }
+    } catch (err) {
+        console.log(err);
+    }
+}
+
 // save feature of audio file to csv
 async function saveFeatureToCSV() {
-    const featureStats = featureContainer.length != 0 ? getStats(featureContainer) : console.log('No features extracted yet');
     try {
+        const featureStats = featureContainer.length != 0 ? getStats(featureContainer) : console.log('No features extracted yet');
         debug ? console.log(featureStats.length) : '';
         const data = featureStats.toString();
         // save file
@@ -344,43 +365,65 @@ async function getFeatures() {
     Meyda.numberOfMFCCCoefficients = n_mfcc;
 
     try {
-        // check if signal length is the power of 2
-        let paddedSig;
-        if (!isPowerOf2(signal.length)) {
-            const len = signal.length;
-            const targetPower = Math.ceil(Math.log2(len));
-            const newLen = Math.pow(2, targetPower);
-            const truncLen = Math.pow(2, (targetPower - 1));
+        let allfilesFeatureStats = [];
 
-            if ((newLen - len) < (len - truncLen)) {
-                const padLen = newLen - len;
-                const zeros = new Float32Array(padLen);
+        fileBuffer.forEach(e => {
+            // read wav file
+            const path = fileDir + '/' + e;
+            const buffer = fs.readFileSync(path);
+            audioData = wav.decode(buffer);
+            signal = audioData.channelData[0];
 
-                paddedSig = new Float32Array(newLen);
-                paddedSig.set(signal);
-                paddedSig.set(zeros, len);
+            // check if signal length is the power of 2
+            let paddedSig;
+            if (!isPowerOf2(signal.length)) {
+                const len = signal.length;
+                const targetPower = Math.ceil(Math.log2(len));
+                const newLen = Math.pow(2, targetPower);
+                const truncLen = Math.pow(2, (targetPower - 1));
+
+                if ((newLen - len) < (len - truncLen)) {
+                    const padLen = newLen - len;
+                    const zeros = new Float32Array(padLen);
+
+                    paddedSig = new Float32Array(newLen);
+                    paddedSig.set(signal);
+                    paddedSig.set(zeros, len);
+                } else {
+                    paddedSig = signal.subarray(0, truncLen);
+                }
             } else {
-                paddedSig = signal.subarray(0, truncLen);
+                paddedSig = signal;
             }
-        } else {
-            paddedSig = signal;
-        }
-        // extract through signal
-        const sigLen = paddedSig.length;
+            // extract through signal
+            let featureContainer = [];
 
-        for (let i=0; i<sigLen; i+=bufferSize) {
-            const currentSig = paddedSig.subarray(i, i+bufferSize)
-            let extractedFeatures = Meyda.extract(featuresList, currentSig);
-            featureContainer.push(extractedFeatures);
+            const sigLen = paddedSig.length;
+            for (let i=0; i<sigLen; i+=bufferSize) {
+                const currentSig = paddedSig.subarray(i, i+bufferSize)
+                let extractedFeatures = Meyda.extract(featuresList, currentSig);
+                featureContainer.push(extractedFeatures);
 
-            debug ? console.log(extractedFeatures) : '';
-        }
+                // debug ? console.log(extractedFeatures) : '';
+            }
+            
+            if (debug) {
+                console.log(e);
+                // console.log(featureContainer);
+                console.log(featureContainer.length);
+            }
+
+            const featureStats = featureContainer.length != 0 ? getStats(featureContainer) : console.log('No features extracted yet');
+            allfilesFeatureStats.push(featureStats);
+        })
+        const normalizedAllFilesFeature = normalizeFeature(allfilesFeatureStats);
+        
         if (debug) {
-            console.log(featureContainer);
-            console.log(featureContainer.length);
+            console.log('all feature stats', allfilesFeatureStats);
+            console.log('normalized all feature stats', normalizedAllFilesFeature);
         }
+
     } catch (err) {
-        console.log('No audio selected');
         console.log(err);
     }
 }
@@ -388,12 +431,27 @@ async function getFeatures() {
 
 // get Mean & Std of features
 function getStats(featureContainer) {
+    /* 
+    featureContainer: [
+        {rms, zcr, spectralRolloff, ...}
+        {rms, zcr, spectralRolloff, ...}
+        {rms, zcr, spectralRolloff, ...}
+        .
+        .
+        .
+    ] // time series of extracted feature objects
+
+    *****************************
+    return: Float32Array(n_features * 2)
+        [ rms_mean, rms_std, zcr_mean, zcr_std, spectralRolloff_mean, spectralRolloff_std, ... ]
+    */
+
     if (!Array.isArray(featureContainer)) {
         throw 'Cannot get stats, getStats() parameter 0 not an array';
     }
     const len = featureContainer.length;
     const n = finalFeatureSet.length;
-    debug ? console.log(len, n) : '';
+    // debug ? console.log(len, n) : '';
 
     // Put features into their corresponding array
     let stats = [];
@@ -476,17 +534,47 @@ function getStats(featureContainer) {
         featureSet.sharpness.push(e.perceptualSharpness);
         featureSet.spectSlope.push(e.spectralSlope);
     })
-    debug ? console.log(featureSet) : '';
+    // debug ? console.log(featureSet) : '';
     
     // Get mean and std of each feature
     for (let i=0; i<n/2; ++i) {
         stats.push(mean(featureSet[Object.keys(featureSet)[i]]));
         stats.push(std(featureSet[Object.keys(featureSet)[i]]));
     }
-    debug ? console.log(stats) : '';
+    // debug ? console.log(stats) : '';
     
     // Return array of feature statistics as Float32Array
     return new Float32Array(stats)
+}
+
+
+// normalize feature set
+function normalizeFeature(allfeatureStats) {
+    let max = new Array(INPUT_DIM).fill(0);
+    let min = new Array(INPUT_DIM).fill(0);
+
+    // get max of indices 0 - 73 of all array
+    const len = allfeatureStats.length;
+    for (let i=0; i<len; ++i) {
+        for (let j=0; j<INPUT_DIM; ++j) {
+            if (allfeatureStats[i][j] > max[j]) max[j] = allfeatureStats[i][j];
+            if (allfeatureStats[i][j] < min[j]) min[j] = allfeatureStats[i][j];
+        }
+    }
+    // normalize data base on the max of each index
+    const normalized = allfeatureStats.map(array => {
+        return array.map((n, i) => {
+            const norm = max[i] - min[i];
+            return (n + min[i]) / norm;
+        });
+    });
+
+    if (debug) {
+        console.log(max);
+        console.log(min);
+    }
+
+    return normalized
 }
 
 
@@ -510,6 +598,13 @@ async function predict() {
 // check if number is the power of 2
 function isPowerOf2(v) {
     return v && !(v & (v - 1));
+}
+
+
+// normalize array of feature by the largest value
+function normalize(a) {
+    const max = Math.max(a);
+    return a.map(x => x / max);
 }
 
 
