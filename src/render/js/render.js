@@ -224,6 +224,7 @@ async function getFileDir() {
     }
 }
 
+
 // save feature of audio file to csv
 async function saveFeatureToCSV() {
     try {
@@ -598,13 +599,6 @@ async function predict() {
 // check if number is the power of 2
 function isPowerOf2(v) {
     return v && !(v & (v - 1));
-}
-
-
-// normalize array of feature by the largest value
-function normalize(a) {
-    const max = Math.max(a);
-    return a.map(x => x / max);
 }
 
 
