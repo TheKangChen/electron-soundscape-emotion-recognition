@@ -8,11 +8,11 @@ const Meyda = require('meyda');
 const tf = require('@tensorflow/tfjs-node');
 
 
-const debug = true;
+const debug = false;
 
 
 /**************** Variables *******************/
-// List of features
+// List of Meyda features
 let featuresList = [
     'rms',
     'zcr',
@@ -29,6 +29,7 @@ let featuresList = [
     'perceptualSharpness',
     'spectralSlope'
 ];
+// List of features from Emo-soundscape
 const finalFeatureSet = [
     'rms_mean',
     'rms_std',
@@ -112,14 +113,15 @@ let csvFile; // csv file
 let csvFeatureData = []; // csv read feature data
 
 let fileDir; // directory containing all the audio files
-let fileBuffer; // audio file buffer
+let fileList; // container for audio filename *
+let n_clips;
 
 // feature extraction
-const INPUT_DIM = 74;
-let normalizedAllFilesFeature; // container for normalized feature of all files
+let normalizedAllFilesFeature; // container for normalized feature of all files *
 
 // model Prediction
-let prediction = []; // container for arousal and valence prediction of all files
+const INPUT_DIM = 74; // model input dimension
+let prediction = []; // container for arousal and valence prediction of all files *
 
 // audio metadata
 const sampleRate = 44100;
@@ -132,14 +134,15 @@ const n_mfcc = 13;
 /**********************************************/
 // Select HTML elements
 /**********************************************/
-const audioElement = document.getElementById('audio');
+
+const statusText = document.getElementById("status");
 
 const fileBtn = document.getElementById("fileBtn");
-// fileBtn.onclick = getAudioFile;
 fileBtn.onclick = getFileDir;
+// fileBtn.onclick = getAudioFile;
 
-const csvBtn = document.getElementById("csvBtn");
-csvBtn.onclick = getCSVFile;
+// const csvBtn = document.getElementById("csvBtn");
+// csvBtn.onclick = getCSVFile;
 
 const extractBtn = document.getElementById("extractBtn");
 extractBtn.onclick = getFeatures;
@@ -147,11 +150,11 @@ extractBtn.onclick = getFeatures;
 const predictBtn = document.getElementById('predictBtn');
 predictBtn.onclick = predict;
 
-const saveFeatBtn = document.getElementById("saveFeatBtn");
-saveFeatBtn.onclick = saveFeatureToCSV;
+const saveOutputBtn = document.getElementById("saveOutputBtn");
+saveOutputBtn.onclick = saveToCSV;
 
-const savePredBtn = document.getElementById("savePredBtn");
-savePredBtn.onclick = savePredictionToCSV;
+// const savePredBtn = document.getElementById("savePredBtn");
+// savePredBtn.onclick = savePredictionToCSV;
 
 
 
@@ -196,76 +199,6 @@ async function getAudioFile() {
 }
 
 
-// get all files inside directory
-async function getFileDir() {
-    try {
-        const selectedDir = await dialog.showOpenDialog({
-            title: 'Open Directory',
-            defaultPath: app.getPath('desktop'),
-            buttonLabel: 'Open',
-            properties: ['openDirectory'],
-        });
-        fileDir = selectedDir.filePaths;
-        const canceled = selectedDir.canceled;
-        
-        fileBuffer = fs.readdirSync(fileDir[0]);
-        if (debug) {
-            console.log(fileDir);
-            console.log(canceled);
-            console.log(fileBuffer);
-        }
-    } catch (err) {
-        console.log(err);
-    }
-}
-
-
-// save feature of audio file to csv
-async function saveFeatureToCSV() {
-    try {
-        const featureStats = featureContainer.length != 0 ? getStats(featureContainer) : console.log('No features extracted yet');
-        debug ? console.log(featureStats.length) : '';
-        const data = featureStats.toString();
-        // save file
-        const filename = audioFile[0].split('/').slice(-1).toString().slice(0,-4) + '_features';
-        debug ? console.log(filename, typeof filename) : '';
-        const selectedFolder = await dialog.showSaveDialog({
-            title: 'Save File',
-            defaultPath: path.join(app.getPath('desktop'), filename) || path.join(__dirname, '../../../export/', filename),
-            buttonLabel: 'Save',
-            filters: [
-                {
-                    name: 'CSV Files',
-                    extensions: ['csv']
-                }
-            ],
-            properties: [
-                'createDirectory',
-                'showOverwriteConfirmation'
-            ]
-        });
-
-        const filePath = selectedFolder.filePath;
-        const canceled = selectedFolder.canceled;
-
-        if (debug) {
-            console.log(filePath);
-            console.log(canceled);
-        }
-
-        if (!canceled) {
-            // write to csv file
-            fs.writeFile(filePath.toString(), data, err => {
-                if (err) throw err;
-                console.log(err);
-            })
-        }
-    } catch (err) {
-        console.log(err);
-    }
-}
-
-
 // get feature csv file
 async function getCSVFile() {
     try {
@@ -303,47 +236,32 @@ async function getCSVFile() {
 }
 
 
-// save prediction of audio file to csv
-async function savePredictionToCSV() {
-    const prediction = (arousal && valence) ? [arousal[0], valence[0]] : console.log('No predictions yet');
-    debug ? console.log(prediction) : '';
-    try {
-        const data = prediction.toString();
-        debug ? console.log(data, typeof data) : '';
-        // get filename without path and extension
-        const filename = csvFile.split('/').slice(-1).toString().slice(0,-4) + '_prediction';
-        debug ? console.log(filename, typeof filename) : '';
-        const selectedFolder = await dialog.showSaveDialog({
-            title: 'Save File',
-            defaultPath: path.join(app.getPath('desktop'), filename) || path.join(__dirname, '../../../export/', filename),
-            buttonLabel: 'Save',
-            filters: [
-                {
-                    name: 'CSV Files',
-                    extensions: ['csv']
-                }
-            ],
-            properties: [
-                'createDirectory',
-                'showOverwriteConfirmation'
-            ]
-        });
+// get all files inside directory
+async function getFileDir() {
+    fileDir = null;
+    fileList = null;
+    n_clips = null;
 
-        const filePath = selectedFolder.filePath;
-        const canceled = selectedFolder.canceled;
+    try {
+        const selectedDir = await dialog.showOpenDialog({
+            title: 'Open Directory',
+            defaultPath: app.getPath('desktop'),
+            buttonLabel: 'Open',
+            properties: ['openDirectory'],
+        });
+        fileDir = selectedDir.filePaths;
+        const canceled = selectedDir.canceled;
+        
+        fileList = fs.readdirSync(fileDir[0]);
+        n_clips = fileList.length;
 
         if (debug) {
-            console.log(filePath);
+            console.log(fileDir);
             console.log(canceled);
+            console.log(fileList);
         }
-
-        if (!canceled) {
-            // write to csv file
-            fs.writeFile(filePath.toString(), data, err => {
-                if (err) throw err;
-                console.log(err);
-            })
-        }
+        statusText.innerText = 'Directory Selected! Please Extract Feature!';
+        extractBtn.disabled = false;
     } catch (err) {
         console.log(err);
     }
@@ -352,7 +270,116 @@ async function savePredictionToCSV() {
 
 // save feature and prediction to csv files
 async function saveToCSV() {
-    ;
+    let featureFilePath;
+    let featureCanceled;
+    let predictFilePath;
+    let predictCanceled;
+    const featureFileName = 'Output_Normalized_Features';
+    const predictFileName = csvFile ? csvFile.split('/').slice(-1).toString().slice(0,-4) + '_prediction': 'Output_Prediction'; // get csv filename without path and extension
+
+    try {
+        // select folder to export feature if csv file not selected
+        if (normalizedAllFilesFeature && !csvFile) {
+            const selectFeatureFolder = await dialog.showSaveDialog({
+                title: 'Save Feature File',
+                defaultPath: path.join(app.getPath('desktop'), featureFileName) || path.join(__dirname, '../../../export/', featureFileName),
+                buttonLabel: 'Save',
+                filters: [
+                    {
+                        name: 'CSV Files',
+                        extensions: ['csv']
+                    }
+                ],
+                properties: [
+                    'createDirectory',
+                    'showOverwriteConfirmation'
+                ]
+            });
+            featureFilePath = selectFeatureFolder.filePath;
+            featureCanceled = selectFeatureFolder.canceled;
+        }
+
+        // select folder to export prediction
+        if (prediction.length !== 0) {
+            const selectPredictFolder = await dialog.showSaveDialog({
+                title: 'Save Prediction File',
+                defaultPath: path.join(app.getPath('desktop'), predictFileName) || path.join(__dirname, '../../../export/', predictFileName),
+                buttonLabel: 'Save',
+                filters: [
+                    {
+                        name: 'CSV Files',
+                        extensions: ['csv']
+                    }
+                ],
+                properties: [
+                    'createDirectory',
+                    'showOverwriteConfirmation'
+                ]
+            });
+            predictFilePath = selectPredictFolder.filePath;
+            predictCanceled = selectPredictFolder.canceled;
+        }
+
+        if (debug) {
+            console.log(`feature filepath: ${featureFilePath}`);
+            console.log(`prediction filepath: ${predictFilePath}`);
+            console.log(`feature cancelled: ${featureCanceled}`);
+            console.log(`prediction cancelled: ${predictCanceled}`);
+        }
+        
+        // write feature data to csv
+        if (normalizedAllFilesFeature && !featureCanceled && !csvFile) {
+            const featureData = createCSVContent(normalizedAllFilesFeature, 'feature');
+            fs.writeFile(featureFilePath.toString(), featureData, err => {
+                if (err) throw err;
+            })
+        }
+        
+        // write prediction data to csv
+        if (prediction.length !== 0 && !predictCanceled) {
+            const predictData = createCSVContent(prediction, 'predict');
+            debug ? console.log(predictData) : '';
+            fs.writeFile(predictFilePath.toString(), predictData, err => {
+                if (err) throw err;
+            })
+        }
+
+        statusText.innerText = 'CSV File Saved!';
+        extractBtn.disabled = true;
+        predictBtn.disabled = true;
+        saveOutputBtn.disabled = true;
+    } catch (err) {
+        console.log(err);
+    }
+} 
+
+
+// create csv content
+function createCSVContent(array, option) {
+    debug ? console.log(array[0]) : '';
+    let content;
+    let len = array.length;
+
+    switch (option) {
+        case 'feature':
+            content = ',' + finalFeatureSet.toString() + '\n';
+            break;
+        case 'predict':
+            content = ',' + 'arousal,valence\n';
+            break;
+        default:
+            throw "createCSVContent() parameter 1: 'feature' | 'predict' "
+    }
+    if (csvFile) {
+        for (let i=0; i<len; ++i) {
+            content = content + ',' + array[i].toString() + '\n';
+        }
+    } else {
+        for (let i=0; i<len; ++i) {
+            content = content + fileList[i] + ',' + array[i].toString() + '\n';
+        }
+    }
+    return content;
 }
 
 
@@ -362,16 +389,17 @@ async function saveToCSV() {
 async function getFeatures() {
     let audioData; // audio file data
     let signal; // audio signal from audio data
-
+    
     // config Meyda
     Meyda.sampleRate = sampleRate;
     Meyda.windowingFunction = windowingFunction;
     Meyda.numberOfMFCCCoefficients = n_mfcc;
-
+    
     try {
         let allfilesFeatureStats = [];
-
-        fileBuffer.forEach(e => {
+        
+        statusText.innerText = 'Extracting Features ...';
+        fileList.forEach(e => {
             // read wav file
             const path = fileDir + '/' + e;
             const buffer = fs.readFileSync(path);
@@ -425,10 +453,12 @@ async function getFeatures() {
             console.log('all feature stats', allfilesFeatureStats);
             console.log('normalized all feature stats', normalizedAllFilesFeature);
         }
-
+        
     } catch (err) {
         console.log(err);
     }
+    statusText.innerText = 'Feature Extracted! Please Predict Emotion!';
+    predictBtn.disabled = false;
 }
 
 
@@ -571,6 +601,7 @@ function normalizeFeature(allFeatureStats) {
     let max = new Array(INPUT_DIM).fill(0);
     let min = new Array(INPUT_DIM).fill(0);
 
+    statusText.innerText = 'Normalizing Feature ...';
     // get max of indices 0 - 73 of all array
     const len = allFeatureStats.length;
     for (let i=0; i<len; ++i) {
@@ -602,11 +633,12 @@ function normalizeFeature(allFeatureStats) {
 async function predict() {
     let arousal; // arousal score
     let valence; // valence score
+
+    statusText.innerText = 'Predicting ...';
     try {
         const allData = normalizedAllFilesFeature ? normalizedAllFilesFeature : csvFeatureData;
         if (allData) {
-            debug ? console.log(allData) : '';
-
+            statusText.innerText = 'Prediction Emotion ...';
             for (const array of allData) {
                 const data = Array.from(array);
                 const input = tf.tensor(data).reshape([1,74]);
@@ -617,16 +649,26 @@ async function predict() {
                     console.log(data);
                     console.log(arousal, valence);
                 }
-                
+
                 prediction.push([arousal[0], valence[0]]);
             }
         } else {
             console.log('No feature data, select csv or extract feature from audio directory');
         }
+        statusText.innerText = 'Prediction Complete! Save Feature and Prediction to CSV?';
+        saveOutputBtn.disabled = false;
         debug ? console.log(prediction) : '';
     } catch (err) {
         console.log(err);
     }
+}
+
+
+
+/************** Emotion Taxonomy **************/
+// get emotion description base of Russell's circumplex model of affect
+function getEmotion(prediction) {
+    ;
 }
 
 
