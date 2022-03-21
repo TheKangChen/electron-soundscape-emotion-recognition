@@ -109,22 +109,17 @@ const finalFeatureSet = [
 // file io
 let audioFile; // audio file path
 let csvFile; // csv file
-let featureData; // csv read feature data
+let csvFeatureData = []; // csv read feature data
 
 let fileDir; // directory containing all the audio files
-
-// audio stream
 let fileBuffer; // audio file buffer
-let audioData; // audio file data
-let signal; // audio signal from audio data
 
 // feature extraction
 const INPUT_DIM = 74;
-// let featureContainer = []; // container for all feature
+let normalizedAllFilesFeature; // container for normalized feature of all files
 
 // model Prediction
-let arousal; // arousal score
-let valence; // valence score
+let prediction = []; // container for arousal and valence prediction of all files
 
 // audio metadata
 const sampleRate = 44100;
@@ -298,9 +293,8 @@ async function getCSVFile() {
 
         if (csvFile) {
             fs.readFile(csvFile, 'utf8', (err, data) => {
-                console.log(data.split(','));
-                featureData = data.split(',').map(x => parseFloat(x));
-                debug ? console.log(featureData) : '';
+                csvFeatureData.push(data.split(',').map(x => parseFloat(x)));
+                debug ? console.log(csvFeatureData, csvFeatureData.length) : '';
             });
         }
     } catch (err) {
@@ -356,10 +350,19 @@ async function savePredictionToCSV() {
 }
 
 
+// save feature and prediction to csv files
+async function saveToCSV() {
+    ;
+}
+
+
 
 /****************** Features ******************/
 // get features
 async function getFeatures() {
+    let audioData; // audio file data
+    let signal; // audio signal from audio data
+
     // config Meyda
     Meyda.sampleRate = sampleRate;
     Meyda.windowingFunction = windowingFunction;
@@ -410,14 +413,13 @@ async function getFeatures() {
             
             if (debug) {
                 console.log(e);
-                // console.log(featureContainer);
                 console.log(featureContainer.length);
             }
-
+            // get mean & std of all features
             const featureStats = featureContainer.length != 0 ? getStats(featureContainer) : console.log('No features extracted yet');
             allfilesFeatureStats.push(featureStats);
         })
-        const normalizedAllFilesFeature = normalizeFeature(allfilesFeatureStats);
+        normalizedAllFilesFeature = normalizeFeature(allfilesFeatureStats); // normalize to the max of each feature
         
         if (debug) {
             console.log('all feature stats', allfilesFeatureStats);
@@ -550,20 +552,35 @@ function getStats(featureContainer) {
 
 
 // normalize feature set
-function normalizeFeature(allfeatureStats) {
+function normalizeFeature(allFeatureStats) {
+    /* 
+    allFeatureStats: [
+        Float32Array(74),
+        Float32Array(74),
+        Float32Array(74),
+        .
+        .
+        .
+    ] // Array(n_clips): feature statistics of all clips
+
+    *****************************
+    return: Array(n_clips)
+        [ Float32Array(74), Float32Array(74), Float32Array(74),  ... ]
+    */
+
     let max = new Array(INPUT_DIM).fill(0);
     let min = new Array(INPUT_DIM).fill(0);
 
     // get max of indices 0 - 73 of all array
-    const len = allfeatureStats.length;
+    const len = allFeatureStats.length;
     for (let i=0; i<len; ++i) {
         for (let j=0; j<INPUT_DIM; ++j) {
-            if (allfeatureStats[i][j] > max[j]) max[j] = allfeatureStats[i][j];
-            if (allfeatureStats[i][j] < min[j]) min[j] = allfeatureStats[i][j];
+            if (allFeatureStats[i][j] > max[j]) max[j] = allFeatureStats[i][j];
+            if (allFeatureStats[i][j] < min[j]) min[j] = allFeatureStats[i][j];
         }
     }
     // normalize data base on the max of each index
-    const normalized = allfeatureStats.map(array => {
+    const normalized = allFeatureStats.map(array => {
         return array.map((n, i) => {
             const norm = max[i] - min[i];
             return (n + min[i]) / norm;
@@ -583,11 +600,30 @@ function normalizeFeature(allfeatureStats) {
 /************** Model Prediction **************/
 // predict
 async function predict() {
+    let arousal; // arousal score
+    let valence; // valence score
     try {
-        const input = featureData ? tf.tensor(featureData).reshape([1,74]) : console.log('No feautre data selected');
-        arousal = await aroModel.predict(input).data();
-        valence = await valModel.predict(input).data();
-        debug ? console.log(arousal, valence) : '';
+        const allData = normalizedAllFilesFeature ? normalizedAllFilesFeature : csvFeatureData;
+        if (allData) {
+            debug ? console.log(allData) : '';
+
+            for (const array of allData) {
+                const data = Array.from(array);
+                const input = tf.tensor(data).reshape([1,74]);
+                arousal = await aroModel.predict(input).data();
+                valence = await valModel.predict(input).data();
+
+                if (debug) {
+                    console.log(data);
+                    console.log(arousal, valence);
+                }
+                
+                prediction.push([arousal[0], valence[0]]);
+            }
+        } else {
+            console.log('No feature data, select csv or extract feature from audio directory');
+        }
+        debug ? console.log(prediction) : '';
     } catch (err) {
         console.log(err);
     }
