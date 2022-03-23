@@ -171,76 +171,6 @@ const valModel = await tf.loadLayersModel('../models/valence/model.json');
 /**********************************************/
 
 /****************** File io *******************/
-// get audio file
-async function getAudioFile() {
-    audioFile = null;
-
-    try {
-        const selectedFile = await dialog.showOpenDialog({
-            title: 'Open File',
-            defaultPath: app.getPath('home') || path.parse(process.cwd()).root,
-            buttonLabel: 'Open',
-            properties: ['openFile', 'openDirectory'],
-            filters: [
-                {
-                    name: 'Audios',
-                    extensions: ['wav']
-                }
-            ]
-        });
-        audioFile = selectedFile.filePaths;
-        const canceled = selectedFile.canceled;
-
-        if (debug) {
-            console.log(audioFile);
-            console.log(canceled);
-        }
-    } catch (err) {
-        console.log(err);
-  }
-}
-
-
-// get feature csv file
-async function getCSVFile() {
-    csvFile = null;
-    csvFeatureData = [];
-
-    try {
-        const selectedFile = await dialog.showOpenDialog({
-            title: 'Open File',
-            defaultPath: app.getPath('home') || path.parse(process.cwd()).root,
-            buttonLabel: 'Open',
-            properties: ['openFile', 'openDirectory'],
-            filters: [
-                {
-                    name: 'CSV Files',
-                    extensions: ['csv']
-                }
-            ]
-        });
-
-        csvFile = selectedFile.filePaths[0].toString();
-        const canceled = selectedFile.canceled;
-        // const filePath = file[0].toString();
-
-        if (debug) {
-            console.log(csvFile);
-            console.log(canceled);
-        }
-
-        if (csvFile) {
-            fs.readFile(csvFile, 'utf8', (err, data) => {
-                csvFeatureData.push(data.split(',').map(x => parseFloat(x)));
-                debug ? console.log(csvFeatureData, csvFeatureData.length) : '';
-            });
-        }
-    } catch (err) {
-        console.log(err);
-  }
-}
-
-
 // get all files inside directory
 async function getFileDir() {
     fileDir = null;
@@ -258,6 +188,9 @@ async function getFileDir() {
         const canceled = selectedDir.canceled;
         
         fileList = fs.readdirSync(fileDir[0]);
+
+        // check and remove files that doesn't have .wav ext
+        fileList = fileList.filter(s => s.substring(s.lastIndexOf('.')+1, s.length) == 'wav')
         n_clips = fileList.length;
 
         if (debug) {
