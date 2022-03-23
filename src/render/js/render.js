@@ -8,7 +8,7 @@ const Meyda = require('meyda');
 const tf = require('@tensorflow/tfjs-node');
 
 
-const debug = false;
+const debug = true;
 
 
 /**************** Variables *******************/
@@ -173,6 +173,8 @@ const valModel = await tf.loadLayersModel('../models/valence/model.json');
 /****************** File io *******************/
 // get audio file
 async function getAudioFile() {
+    audioFile = null;
+
     try {
         const selectedFile = await dialog.showOpenDialog({
             title: 'Open File',
@@ -201,6 +203,9 @@ async function getAudioFile() {
 
 // get feature csv file
 async function getCSVFile() {
+    csvFile = null;
+    csvFeatureData = [];
+
     try {
         const selectedFile = await dialog.showOpenDialog({
             title: 'Open File',
@@ -389,6 +394,7 @@ function createCSVContent(array, option) {
 async function getFeatures() {
     let audioData; // audio file data
     let signal; // audio signal from audio data
+    normalizedAllFilesFeature = null;
     
     // config Meyda
     Meyda.sampleRate = sampleRate;
@@ -411,19 +417,21 @@ async function getFeatures() {
             if (!isPowerOf2(signal.length)) {
                 const len = signal.length;
                 const targetPower = Math.ceil(Math.log2(len));
-                const newLen = Math.pow(2, targetPower);
+                // const newLen = Math.pow(2, targetPower);
                 const truncLen = Math.pow(2, (targetPower - 1));
 
-                if ((newLen - len) < (len - truncLen)) {
-                    const padLen = newLen - len;
-                    const zeros = new Float32Array(padLen);
+                // if ((newLen - len) < (len - truncLen)) {
+                //     const padLen = newLen - len;
+                //     const zeros = new Float32Array(padLen);
 
-                    paddedSig = new Float32Array(newLen);
-                    paddedSig.set(signal);
-                    paddedSig.set(zeros, len);
-                } else {
-                    paddedSig = signal.subarray(0, truncLen);
-                }
+                //     paddedSig = new Float32Array(newLen);
+                //     paddedSig.set(signal);
+                //     paddedSig.set(zeros, len);
+                // } else {
+                //     paddedSig = signal.subarray(0, truncLen);
+                // }
+                
+                paddedSig = signal.subarray(0, truncLen);
             } else {
                 paddedSig = signal;
             }
@@ -633,6 +641,7 @@ function normalizeFeature(allFeatureStats) {
 async function predict() {
     let arousal; // arousal score
     let valence; // valence score
+    prediction = [];
 
     statusText.innerText = 'Predicting ...';
     try {
