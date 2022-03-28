@@ -181,14 +181,15 @@ function createDataObject(filenames, dataPoints) {
     })
 }
 
-
+plot();
 async function plot() {
     const size = [600, 600];
     const height = size[1];
     const width = size[0];
     const padding = {vertical: 28.5, horizontal: 28.5};
-    
-    // const data = createDataObject(fileList, prediction);
+    const radius = 4;
+
+    // const data = await createDataObject(fileList, prediction);
 
     const data = [
         {name: 'audio1.wav', x: -1, y: -1},
@@ -199,11 +200,17 @@ async function plot() {
         {name: 'audio6.wav', x: 1, y: 1}
     ];
 
-    const xScale = d3.scaleLinear().domain(d3.extent(data, d => d.x)).nice()
+    const xScale = d3.scaleLinear().domain([-1, 1]).nice()
     .range([padding.horizontal, width - padding.horizontal]);
 
-    const yScale = d3.scaleLinear().domain(d3.extent(data, d => d.y)).nice()
+    const yScale = d3.scaleLinear().domain([-1, 1]).nice()
     .range([height - padding.vertical, padding.vertical]);
+
+    // const xScale = d3.scaleLinear().domain(d3.extent(data, d => d.x)).nice()
+    // .range([padding.horizontal, width - padding.horizontal]);
+
+    // const yScale = d3.scaleLinear().domain(d3.extent(data, d => d.y)).nice()
+    // .range([height - padding.vertical, padding.vertical]);
 
     const xAxis = g => g
     .attr("transform", `translate(0,${height - padding.vertical})`)
@@ -241,6 +248,8 @@ async function plot() {
         .attr("text-anchor", "start")
         .attr("font-weight", "bold")
         .text("Arousal"));
+    
+    const color = d3.scaleSequential(d3.interpolateRdBu).domain([1, -1]);
 
     const svg = d3.select('svg')
     .attr('viewBox', [0, 0, width, height]);
@@ -259,10 +268,37 @@ async function plot() {
     .join("circle")
       .attr("cx", d => xScale(d.x))
       .attr("cy", d => yScale(d.y))
-      .attr("fill", d => xScale(d.x))
-      .attr("r", 3.5);
+      .attr("fill", d => color(d.x))
+      .attr("r", radius)
+      .on('mouseover', handleMouseOver)
+      .on('mouseout', handleMouseOut);
+    
+    function handleMouseOver(d) {
+        d3.select(this)
+        .attr('fill', 'grey')
+        .attr('r', radius * 2);
+
+        svg.append("text")
+        .attr('id', `${d.name}`)
+        .attr('class', 'hover')
+        .attr('x', () => xScale(d.x) - 30)
+        .attr('y', () => yScale(d.y) - 15)
+        .text(() => d.name);
+    }
+    
+    function handleMouseOut(d) {
+        console.log(d.name);
+        d3.select(this)
+        .attr('fill', d => color(d.x))
+        .attr('r', radius);
+
+        d3.selectAll('.hover').remove();
+    }
+
+    function handleMouseClick(d) {
+        ;
+    }
 }
-plot();
 
 
 
@@ -694,12 +730,14 @@ async function predict() {
 
                 prediction.push([arousal[0], valence[0]]);
             }
+            statusText.innerText = 'Prediction Complete! Save Feature and Prediction to CSV?';
+            saveOutputBtn.disabled = false;
+            debug ? console.log(prediction) : '';
+
+            plot();
         } else {
             console.log('No feature data, select csv or extract feature from audio directory');
         }
-        statusText.innerText = 'Prediction Complete! Save Feature and Prediction to CSV?';
-        saveOutputBtn.disabled = false;
-        debug ? console.log(prediction) : '';
     } catch (err) {
         console.log(err);
     }
