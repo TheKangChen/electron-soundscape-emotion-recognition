@@ -7,7 +7,6 @@ body {
   padding: 2rem;
 }
 
-/* .container {
-  width: 95%;
-  height: 400px;
-} */
+#audio {
+  width: 100%;
+}

@@ -109,7 +109,6 @@ const finalFeatureSet = [
 ];
 
 // file io
-let audioFile; // audio file path
 let csvFile; // csv file
 let csvFeatureData = []; // csv read feature data
 
@@ -136,6 +135,10 @@ const n_mfcc = 13;
 /**********************************************/
 // Select HTML elements
 /**********************************************/
+const audioFile = document.getElementById('audioName');
+
+const audioElement = document.getElementById('audio');
+
 const statusText = document.getElementById("status");
 
 const fileBtn = document.getElementById("fileBtn");
@@ -152,6 +155,7 @@ saveOutputBtn.onclick = saveToCSV;
 
 // const saveSelectedFileBtn = document.getElementById("saveSelectedFileBtn");
 // saveSelectedFileBtn.onclick = saveSelectedFile;
+// plot();
 
 
 
@@ -169,7 +173,6 @@ const valModel = await tf.loadLayersModel('../models/valence/model.json');
 const d3n = new D3Node();
 const d3 = d3n.d3;
 
-
 // create array of objects containing filename and prediction
 function createDataObject(filenames, dataPoints) {
     return filenames.map((fn, i) => {
@@ -181,7 +184,8 @@ function createDataObject(filenames, dataPoints) {
     })
 }
 
-plot();
+
+// plot audio file and prediction on to 
 async function plot() {
     const size = [600, 600];
     const height = size[1];
@@ -189,36 +193,36 @@ async function plot() {
     const padding = {vertical: 28.5, horizontal: 28.5};
     const radius = 4;
 
-    // const data = await createDataObject(fileList, prediction);
+    const data = await createDataObject(fileList, prediction);
 
-    const data = [
-        {name: 'audio1.wav', x: -1, y: -1},
-        {name: 'audio2.wav', x: -0.75, y: -0.8},
-        {name: 'audio3.wav', x: -0.5, y: -0.5},
-        {name: 'audio4.wav', x: 0, y: 0.1},
-        {name: 'audio5.wav', x: 0.5, y: 0.75},
-        {name: 'audio6.wav', x: 1, y: 1}
-    ];
-
-    const xScale = d3.scaleLinear().domain([-1, 1]).nice()
-    .range([padding.horizontal, width - padding.horizontal]);
-
-    const yScale = d3.scaleLinear().domain([-1, 1]).nice()
-    .range([height - padding.vertical, padding.vertical]);
+    // const data = [
+    //     {name: 'audio1.wav', x: -1, y: -1},
+    //     {name: 'audio2.wav', x: -0.75, y: -0.8},
+    //     {name: 'audio3.wav', x: -0.5, y: -0.5},
+    //     {name: 'audio4.wav', x: 0, y: 0.1},
+    //     {name: 'audio5.wav', x: 0.5, y: 0.75},
+    //     {name: 'audio6.wav', x: 1, y: 1}
+    // ];
 
     // const xScale = d3.scaleLinear().domain(d3.extent(data, d => d.x)).nice()
     // .range([padding.horizontal, width - padding.horizontal]);
 
     // const yScale = d3.scaleLinear().domain(d3.extent(data, d => d.y)).nice()
     // .range([height - padding.vertical, padding.vertical]);
+    
+    const xScale = d3.scaleLinear().domain([-1, 1]).nice()
+    .range([padding.horizontal, width - padding.horizontal]);
+
+    const yScale = d3.scaleLinear().domain([-1, 1]).nice()
+    .range([height - padding.vertical, padding.vertical]);
 
     const xAxis = g => g
     .attr("transform", `translate(0,${height - padding.vertical})`)
     .call(d3.axisBottom(xScale).ticks(null, "+"))
     .call(g => g.select(".domain").remove())
     .call(g => g.selectAll(".tick line")
-      .filter(d => d === 0)
-      .clone()
+        .filter(d => d === 0)
+        .clone()
         .attr("y2", -height - padding.vertical - padding.vertical)
         .attr("stroke", "#ccc"))
     .call(g => g.append("text")
@@ -236,8 +240,8 @@ async function plot() {
     .call(d3.axisLeft(yScale).ticks(null, "+"))
     .call(g => g.select(".domain").remove())
     .call(g => g.selectAll(".tick line")
-      .filter(d => d === 0)
-      .clone()
+        .filter(d => d === 0)
+        .clone()
         .attr("x2", width - padding.horizontal - padding.horizontal)
         .attr("stroke", "#ccc"))
     .call(g => g.append("text")
@@ -248,7 +252,7 @@ async function plot() {
         .attr("text-anchor", "start")
         .attr("font-weight", "bold")
         .text("Arousal"));
-    
+
     const color = d3.scaleSequential(d3.interpolateRdBu).domain([1, -1]);
 
     const svg = d3.select('svg')
@@ -270,10 +274,11 @@ async function plot() {
       .attr("cy", d => yScale(d.y))
       .attr("fill", d => color(d.x))
       .attr("r", radius)
-      .on('mouseover', handleMouseOver)
-      .on('mouseout', handleMouseOut);
+      .on('mouseover', mouseOver)
+      .on('mouseout', mouseOut)
+      .on('click', mouseClick);
     
-    function handleMouseOver(d) {
+    function mouseOver(d) {
         d3.select(this)
         .attr('fill', 'grey')
         .attr('r', radius * 2);
@@ -286,8 +291,7 @@ async function plot() {
         .text(() => d.name);
     }
     
-    function handleMouseOut(d) {
-        console.log(d.name);
+    function mouseOut(d) {
         d3.select(this)
         .attr('fill', d => color(d.x))
         .attr('r', radius);
@@ -295,8 +299,10 @@ async function plot() {
         d3.selectAll('.hover').remove();
     }
 
-    function handleMouseClick(d) {
-        ;
+    function mouseClick(d) {
+        const name = `${fileDir}/${d.name}`;
+        audioFile.innerHTML = d.name;
+        audioElement.src = name;
     }
 }
 
