@@ -6,6 +6,7 @@ const path = require('path');
 const wav = require('node-wav');
 const Meyda = require('meyda');
 const tf = require('@tensorflow/tfjs-node');
+const D3Node = require('d3-node');
 
 
 const debug = true;
@@ -131,18 +132,14 @@ const windowingFunction = 'hanning';
 const n_mfcc = 13;
 
 
+
 /**********************************************/
 // Select HTML elements
 /**********************************************/
-
 const statusText = document.getElementById("status");
 
 const fileBtn = document.getElementById("fileBtn");
 fileBtn.onclick = getFileDir;
-// fileBtn.onclick = getAudioFile;
-
-// const csvBtn = document.getElementById("csvBtn");
-// csvBtn.onclick = getCSVFile;
 
 const extractBtn = document.getElementById("extractBtn");
 extractBtn.onclick = getFeatures;
@@ -153,8 +150,8 @@ predictBtn.onclick = predict;
 const saveOutputBtn = document.getElementById("saveOutputBtn");
 saveOutputBtn.onclick = saveToCSV;
 
-// const savePredBtn = document.getElementById("savePredBtn");
-// savePredBtn.onclick = savePredictionToCSV;
+// const saveSelectedFileBtn = document.getElementById("saveSelectedFileBtn");
+// saveSelectedFileBtn.onclick = saveSelectedFile;
 
 
 
@@ -163,6 +160,109 @@ saveOutputBtn.onclick = saveToCSV;
 /**********************************************/
 const aroModel = await tf.loadLayersModel('../models/arousal/model.json');
 const valModel = await tf.loadLayersModel('../models/valence/model.json');
+
+
+
+/**********************************************/
+// d3
+/**********************************************/
+const d3n = new D3Node();
+const d3 = d3n.d3;
+
+
+// create array of objects containing filename and prediction
+function createDataObject(filenames, dataPoints) {
+    return filenames.map((fn, i) => {
+        return {
+            name: fn,
+            x: dataPoints[i][1],
+            y: dataPoints[i][0]
+        }
+    })
+}
+
+
+async function plot() {
+    const size = [600, 600];
+    const height = size[1];
+    const width = size[0];
+    const padding = {vertical: 28.5, horizontal: 28.5};
+    
+    // const data = createDataObject(fileList, prediction);
+
+    const data = [
+        {name: 'audio1.wav', x: -1, y: -1},
+        {name: 'audio2.wav', x: -0.75, y: -0.8},
+        {name: 'audio3.wav', x: -0.5, y: -0.5},
+        {name: 'audio4.wav', x: 0, y: 0.1},
+        {name: 'audio5.wav', x: 0.5, y: 0.75},
+        {name: 'audio6.wav', x: 1, y: 1}
+    ];
+
+    const xScale = d3.scaleLinear().domain(d3.extent(data, d => d.x)).nice()
+    .range([padding.horizontal, width - padding.horizontal]);
+
+    const yScale = d3.scaleLinear().domain(d3.extent(data, d => d.y)).nice()
+    .range([height - padding.vertical, padding.vertical]);
+
+    const xAxis = g => g
+    .attr("transform", `translate(0,${height - padding.vertical})`)
+    .call(d3.axisBottom(xScale).ticks(null, "+"))
+    .call(g => g.select(".domain").remove())
+    .call(g => g.selectAll(".tick line")
+      .filter(d => d === 0)
+      .clone()
+        .attr("y2", -height - padding.vertical - padding.vertical)
+        .attr("stroke", "#ccc"))
+    .call(g => g.append("text")
+        .attr("fill", "#000")
+        .attr("x", padding.vertical)
+        .attr("y", 5)
+        .attr("dx", "55em")
+        .attr("dy", "-1em")
+        .attr("text-anchor", "end")
+        .attr("font-weight", "bold")
+        .text("Valence"));
+
+    const yAxis = g => g
+    .attr("transform", `translate(${padding.horizontal},0)`)
+    .call(d3.axisLeft(yScale).ticks(null, "+"))
+    .call(g => g.select(".domain").remove())
+    .call(g => g.selectAll(".tick line")
+      .filter(d => d === 0)
+      .clone()
+        .attr("x2", width - padding.horizontal - padding.horizontal)
+        .attr("stroke", "#ccc"))
+    .call(g => g.append("text")
+        .attr("fill", "#000")
+        .attr("x", 5)
+        .attr("y", padding.horizontal)
+        .attr("dy", "0.32em")
+        .attr("text-anchor", "start")
+        .attr("font-weight", "bold")
+        .text("Arousal"));
+
+    const svg = d3.select('svg')
+    .attr('viewBox', [0, 0, width, height]);
+
+    svg.append('g')
+    .call(xAxis);
+    
+    svg.append('g')
+    .call(yAxis)
+
+    svg.append("g")
+      .attr("stroke", "#000")
+      .attr("stroke-opacity", 0.2)
+    .selectAll("circle")
+    .data(data)
+    .join("circle")
+      .attr("cx", d => xScale(d.x))
+      .attr("cy", d => yScale(d.y))
+      .attr("fill", d => xScale(d.x))
+      .attr("r", 3.5);
+}
+plot();
 
 
 

@@ -9,11 +9,18 @@
   </head>
   <body>
     <h1>Soundscape Emotion Recognition</h1>
+    <hr />
     <div>
+      <!-- audio player area -->
+      <p id="audioName"></p>
+      <audio id="audio" controls></audio>
+    </div>
+    <hr />
+    <svg class="container" viewBox="0 0 500 500">
 
-      <canvas></canvas>
-
-      <hr />
+    </svg>
+    <hr />
+    <div>
 
       <p id="status">Current Status</p>
 
@@ -23,6 +30,10 @@
       <button id="extractBtn" disabled>Extract Feature</button>
       <button id="predictBtn" disabled>Predict</button>
       <button id="saveOutputBtn"disabled>Save Extracted Features & Prediction</button>
-  </div>
+    </div>
+    <div>
+      <!-- selected clip area -->
+      <!-- <button> Select Clips </button> -->
+    </div>
   </body>
 </html>

@@ -47,6 +47,7 @@
   "dependencies": {
     "@electron/remote": "^2.0.8",
     "@tensorflow/tfjs-node": "^3.14.0",
+    "d3-node": "^2.2.3",
     "electron-squirrel-startup": "^1.0.0",
     "meyda": "^5.3.0",
     "node-wav": "^0.0.2"
